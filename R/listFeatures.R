@@ -132,16 +132,41 @@ get_abstract_df <- function(url = "https://metashare.maps.vic.gov.au/geonetwork/
 #' @noRd
 #' @param c content from metashare api
 
+# robust replacement for vicspatial:::extract_abstract
 extract_abstract <- function(c) {
-  
   md_list <- c[["metadata"]]
   
-  data <- lapply(md_list, function(x) {
-    
-    data.frame(metadataID = x[["geonet:info"]][["uuid"]], 
-               Abstract = x[["abstract"]])
-    
-  }) %>% dplyr::bind_rows()
+  # empty-safe return
+  if (is.null(md_list) || length(md_list) == 0) {
+    return(tibble::tibble(metadataID = character(), Abstract = character()))
+  }
   
-  return(data)
+  # small helper to dig safely through nested lists
+  get_in <- function(x, path, default = NA_character_) {
+    for (nm in path) {
+      if (is.null(x) || is.null(x[[nm]])) return(default)
+      x <- x[[nm]]
+    }
+    x
+  }
+  
+  # normalise possible list-y abstracts into a single character string
+  normalise_abstract <- function(ab) {
+    if (is.null(ab) || length(ab) == 0) return(NA_character_)
+    if (is.list(ab)) {
+      # some APIs return text under "$" or "#text"; otherwise collapse
+      ab <- ab[["$"]] %||% ab[["#text"]] %||% paste0(unlist(ab), collapse = " ")
+    }
+    as.character(ab)
+  }
+  
+  # define %||% locally to avoid importing rlang
+  `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
+  
+  purrr::map_dfr(md_list, function(x) {
+    tibble::tibble(
+      metadataID = as.character(get_in(x, c("geonet:info", "uuid"))),
+      Abstract   = normalise_abstract(x[["abstract"]])
+    )
+  })
 }

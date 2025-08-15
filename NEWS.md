@@ -1,3 +1,6 @@
+# vicspatial 0.3.1
+* Error with listLayers() in obtaining abstracts, now fixed with safer verion of extracting metadata.
+
 # vicspatial 0.3.0
 * VicmapR has now been renamed to vicspatial 
 * Change logo and update vignette with tram data not working

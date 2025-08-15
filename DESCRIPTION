@@ -1,6 +1,6 @@
 Package: vicspatial
 Title: Access Victorian Spatial Data Through Web File Services (WFS) 
-Version: 0.3.0
+Version: 0.3.1
 Authors@R: 
     c(person(given = "Justin",
            family = "Cally",
@@ -64,7 +64,8 @@ Imports:
     kableExtra,
     mapview,
     leaflet,
-    stringr
+    stringr,
+    tibble
 VignetteBuilder: knitr
 SystemRequirements: GDAL (>= 3.0.0), GEOS (>= 3.4.0), PROJ (>= 7.0.0)
 Collate: 

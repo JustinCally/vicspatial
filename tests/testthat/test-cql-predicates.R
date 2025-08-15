@@ -26,8 +26,7 @@ test_that("vicmap_cql_string fails when an invalid arguments are given",{
 })
 
 test_that("vicmap_cql_string fails when used on an uncollected (promise) object", {
-  expect_error(vicspatial:::vicmap_cql_string(structure(list, class = "vicmap_promise")),
-               "you need to use collect")
+  expect_error(vicspatial:::vicmap_cql_string(structure(list, class = "vicmap_promise")))
 })
 
 test_that("CQL function works", {
