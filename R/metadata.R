@@ -108,23 +108,36 @@ get_metadata <- function(x = NULL, metadataID = NULL) {
   
   key_lookup <- if (is.null(metadataID)) get_metadataID(x) else metadataID
   
-  base_url  <- "https://metashare.maps.vic.gov.au/geonetwork"
-  json_url  <- paste0(base_url, "/srv/api/records/", key_lookup)
-  key_url   <- paste0(base_url, "/srv/api/records/", key_lookup,
-                      "/formatters/sdm-html?root=html&output=html")
+  base_url <- "https://metashare.maps.vic.gov.au/geonetwork"
+  search_url <- paste0(base_url, "/srv/api/search/records/_search")
+  key_url <- paste0(base_url, "/srv/eng/catalog.search#/metadata/", key_lookup)
+  formatter_url <- paste0(base_url, "/srv/api/records/", key_lookup,
+                          "/formatters/sdm-html?root=html&output=html")
   
-  # Fetch record JSON from GN4 API
-  json_res <- httr::GET(json_url, httr::add_headers(Accept = "application/json"))
-  httr::stop_for_status(json_res)
-  
-  md <- jsonlite::fromJSON(
-    httr::content(json_res, as = "text", encoding = "UTF-8"),
-    simplifyVector = FALSE
+  # Fetch flattened record from ES index
+  body <- sprintf('{"query":{"term":{"uuid":"%s"}}}', key_lookup)
+  res <- httr::POST(
+    search_url,
+    httr::add_headers(`Content-Type` = "application/json", `Accept` = "application/json"),
+    body = body,
+    encode = "raw"
   )
+  httr::stop_for_status(res)
   
-  # Helper to extract first org for a given contact role
+  hits <- jsonlite::fromJSON(
+    httr::content(res, as = "text", encoding = "UTF-8"),
+    simplifyVector = FALSE
+  )$hits$hits
+  
+  if (length(hits) == 0) stop("No metadata record found for ID: ", key_lookup)
+  
+  md <- hits[[1]]$`_source`
+  
+  # Helper: extract org for a given contact role (gracefully returns NA if absent)
   org_for_role <- function(role) {
-    matches <- purrr::keep(md[["contact"]], ~ isTRUE(.x[["role"]] == role))
+    contacts <- md[["contact"]]
+    if (is.null(contacts) || length(contacts) == 0) return(NA_character_)
+    matches <- purrr::keep(contacts, ~ isTRUE(.x[["role"]] == role))
     if (length(matches) == 0) return(NA_character_)
     as.character(matches[[1]][["organisation"]] %||% NA_character_)
   }
@@ -141,14 +154,14 @@ get_metadata <- function(x = NULL, metadataID = NULL) {
   
   meta_df <- tibble::tibble(
     `Metadata Name` = names(fields),
-    Descriptions    = as.character(unlist(
-      lapply(fields, function(x) if (is.null(x)) NA_character_ else x)
-    ))
+    Descriptions    = as.character(lapply(fields, function(x) {
+      if (is.null(x)) NA_character_ else x
+    }))
   )
   
-  # Data dictionary — scrape sdm-html formatter if still available
+  # Data dictionary via sdm-html formatter
   dd_df <- tryCatch({
-    doc  <- rvest::read_html(key_url)
+    doc  <- rvest::read_html(formatter_url)
     tabs <- rvest::html_elements(doc, "table") %>% rvest::html_table(na.strings = "")
     tabs[[length(tabs)]]
   }, error = function(e) {
