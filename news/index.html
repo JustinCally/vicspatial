@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">vicspatial</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.3.1</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.3.2</span>
       </span>
     </div>
 
@@ -64,8 +64,13 @@
     </div>
 
     <div class="section level2">
+<h2 class="page-header" data-toc-text="0.3.2" id="vicspatial-032">vicspatial 0.3.2<a class="anchor" aria-label="anchor" href="#vicspatial-032"></a></h2>
+<ul><li><p><code><a href="../reference/listLayers.html">listLayers()</a></code> and <code>get_abstract_df()</code>: updated to use the GeoNetwork 4.x Elasticsearch search API (<code>/srv/api/search/records/_search</code>) replacing the defunct GeoNetwork 3.x Lucene endpoint (<code>/srv/eng/q</code>). Abstract field now sourced from <code>resourceAbstractObject$default</code> rather than the old <code>abstract</code> field. JSON queries are now passed as raw strings to avoid <code>jsonlite</code> serialising empty lists as <code>[]</code> instead of <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code>.</p></li>
+<li><p><code><a href="../reference/data_citation.html">get_metadata()</a></code>, <code><a href="../reference/data_citation.html">data_citation()</a></code>, <code><a href="../reference/data_citation.html">data_dictionary()</a></code>: updated to use the GeoNetwork 4.x REST records API (<code>/srv/api/records/&lt;uuid&gt;</code>) returning JSON, replacing HTML scraping of the legacy metadata store. Title and abstract now sourced from <code>resourceTitleObject$default</code> and <code>resourceAbstractObject$default</code> respectively. Data dictionary falls back to scraping the <code>sdm-html</code> formatter if available, returning an empty table otherwise.</p></li>
+</ul></div>
+    <div class="section level2">
 <h2 class="page-header" data-toc-text="0.3.1" id="vicspatial-031">vicspatial 0.3.1<a class="anchor" aria-label="anchor" href="#vicspatial-031"></a></h2>
-<ul><li>Error with listLayers() in obtaining abstracts, now fixed with safer verion of extracting metadata.</li>
+<ul><li>Error with listLayers() in obtaining abstracts, now fixed with safer version of extracting metadata.</li>
 </ul></div>
     <div class="section level2">
 <h2 class="page-header" data-toc-text="0.3.0" id="vicspatial-030">vicspatial 0.3.0<a class="anchor" aria-label="anchor" href="#vicspatial-030"></a></h2>
@@ -195,7 +200,7 @@
 </div>
 
 <div class="pkgdown">
-  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.3.</p>
+  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
       </footer></div>
