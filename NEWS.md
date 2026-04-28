@@ -1,5 +1,20 @@
+# vicspatial 0.3.2
+* `listLayers()` and `get_abstract_df()`: updated to use the GeoNetwork 4.x 
+  Elasticsearch search API (`/srv/api/search/records/_search`) replacing the 
+  defunct GeoNetwork 3.x Lucene endpoint (`/srv/eng/q`). Abstract field now 
+  sourced from `resourceAbstractObject$default` rather than the old `abstract` 
+  field. JSON queries are now passed as raw strings to avoid `jsonlite` 
+  serialising empty lists as `[]` instead of `{}`.
+
+* `get_metadata()`, `data_citation()`, `data_dictionary()`: updated to use the 
+  GeoNetwork 4.x REST records API (`/srv/api/records/<uuid>`) returning JSON, 
+  replacing HTML scraping of the legacy metadata store. Title and abstract now 
+  sourced from `resourceTitleObject$default` and `resourceAbstractObject$default` 
+  respectively. Data dictionary falls back to scraping the `sdm-html` formatter 
+  if available, returning an empty table otherwise.
+  
 # vicspatial 0.3.1
-* Error with listLayers() in obtaining abstracts, now fixed with safer verion of extracting metadata.
+* Error with listLayers() in obtaining abstracts, now fixed with safer version of extracting metadata.
 
 # vicspatial 0.3.0
 * VicmapR has now been renamed to vicspatial 

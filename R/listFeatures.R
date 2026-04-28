@@ -78,95 +78,59 @@ listLayers <- function(..., abstract = TRUE) {
   return(df)
 }  
 
-#' get abstracts from API
-#' @param url url of geonetwork api
+#' get abstracts from Elasticsearch API (GeoNetwork 4.x)
+#' @param base_url base URL of the geonetwork instance
 #' @return data.frame with Abstract and metadataID column
 #' @noRd
-
-get_abstract_df <- function(url = "https://metashare.maps.vic.gov.au/geonetwork/srv/eng/q?") {
+get_abstract_df <- function(base_url = "https://metashare.maps.vic.gov.au/geonetwork") {
   
-  # parse the api url
-  api_url <- httr::parse_url(url)
+  search_url <- paste0(base_url, "/srv/api/search/records/_search")
   
-  # set the base query for the api
-  base_query <- list(`_content_type`= "json", 
-                     fast= "index",
-                     mdClassification="unclassified", 
-                     spatialRepresentationType="vector")
+  # Get total count first
+  count_res <- httr::POST(
+    search_url,
+    httr::add_headers(`Content-Type` = "application/json", `Accept` = "application/json"),
+    body = '{"from":0,"size":0,"query":{"match_all":{}}}',
+    encode = "raw"
+  )
+  httr::stop_for_status(count_res)
+  total <- jsonlite::fromJSON(
+    httr::content(count_res, as = "text", encoding = "UTF-8"),
+    simplifyVector = FALSE
+  )$hits$total$value
   
-  # set the api url with the base query
-  api_base_query_url <- api_url 
-  api_base_query_url$query <- base_query
-  
-  # get the number of hits from the api
-  hits <- httr::GET(api_base_query_url, 
-                    query = list(resultType="hits", summaryOnly="1"))
-  
-  # stop if there is an error
-  httr::stop_for_status(hits)
-  
-  # get the number of hits
-  hit_cont <- httr::content(hits)[[1]][["@count"]]
-  
-  # set the start and end points for the api query
-  breaks_start <- seq(from = 1, to = hit_cont, by = 100)
-  breaks_end <- c(seq(from = 100, to = hit_cont, by = 100), hit_cont)
-  
-  abstract_data <- list()
-  for(i in 1:length(breaks_start)) {
-    res <- httr::GET(api_base_query_url, 
-                     query = list(from = breaks_start[i], 
-                                  to = breaks_end[i]))
-    httr::stop_for_status(res)
-    contents <- httr::content(res)
-    
-    abstract_data[[i]] <- extract_abstract(contents)
-  }
-  
-  return_data <- dplyr::bind_rows(abstract_data)
-  
-  return(return_data)
-}
-
-#' get abstract df from content of API response
-#' @noRd
-#' @param c content from metashare api
-
-# robust replacement for vicspatial:::extract_abstract
-extract_abstract <- function(c) {
-  md_list <- c[["metadata"]]
-  
-  # empty-safe return
-  if (is.null(md_list) || length(md_list) == 0) {
+  if (is.null(total) || total == 0) {
     return(tibble::tibble(metadataID = character(), Abstract = character()))
   }
   
-  # small helper to dig safely through nested lists
-  get_in <- function(x, path, default = NA_character_) {
-    for (nm in path) {
-      if (is.null(x) || is.null(x[[nm]])) return(default)
-      x <- x[[nm]]
-    }
-    x
-  }
+  # Paginate in blocks of 100
+  from_seq <- seq(from = 0, to = total - 1, by = 100)
   
-  # normalise possible list-y abstracts into a single character string
-  normalise_abstract <- function(ab) {
-    if (is.null(ab) || length(ab) == 0) return(NA_character_)
-    if (is.list(ab)) {
-      # some APIs return text under "$" or "#text"; otherwise collapse
-      ab <- ab[["$"]] %||% ab[["#text"]] %||% paste0(unlist(ab), collapse = " ")
-    }
-    as.character(ab)
-  }
-  
-  # define %||% locally to avoid importing rlang
-  `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
-  
-  purrr::map_dfr(md_list, function(x) {
-    tibble::tibble(
-      metadataID = as.character(get_in(x, c("geonet:info", "uuid"))),
-      Abstract   = normalise_abstract(x[["abstract"]])
+  abstract_data <- lapply(from_seq, function(from_i) {
+    body <- sprintf(
+      '{"from":%d,"size":100,"_source":["uuid","resourceAbstractObject"],"query":{"match_all":{}}}',
+      from_i
     )
+    res <- httr::POST(
+      search_url,
+      httr::add_headers(`Content-Type` = "application/json", `Accept` = "application/json"),
+      body = body,
+      encode = "raw"
+    )
+    httr::stop_for_status(res)
+    hits <- jsonlite::fromJSON(
+      httr::content(res, as = "text", encoding = "UTF-8"),
+      simplifyVector = FALSE
+    )$hits$hits
+    
+    purrr::map_dfr(hits, function(h) {
+      src <- h[["_source"]]
+      tibble::tibble(
+        metadataID = as.character(src[["uuid"]] %||% NA_character_),
+        Abstract   = as.character(src[["resourceAbstractObject"]][["default"]] %||% NA_character_)
+      )
+    })
   })
+  
+  dplyr::bind_rows(abstract_data)
 }

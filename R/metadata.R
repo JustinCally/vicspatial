@@ -104,39 +104,57 @@ get_metadataID <- function(x) {
 #' }
 get_metadata <- function(x = NULL, metadataID = NULL) {
   
-  if(is.null(x) & is.null(metadataID)) {
-    stop("x or anzlicId must be provided")
+  if (is.null(x) && is.null(metadataID)) stop("x or metadataID must be provided")
+  
+  key_lookup <- if (is.null(metadataID)) get_metadataID(x) else metadataID
+  
+  base_url  <- "https://metashare.maps.vic.gov.au/geonetwork"
+  json_url  <- paste0(base_url, "/srv/api/records/", key_lookup)
+  key_url   <- paste0(base_url, "/srv/api/records/", key_lookup,
+                      "/formatters/sdm-html?root=html&output=html")
+  
+  # Fetch record JSON from GN4 API
+  json_res <- httr::GET(json_url, httr::add_headers(Accept = "application/json"))
+  httr::stop_for_status(json_res)
+  
+  md <- jsonlite::fromJSON(
+    httr::content(json_res, as = "text", encoding = "UTF-8"),
+    simplifyVector = FALSE
+  )
+  
+  # Helper to extract first org for a given contact role
+  org_for_role <- function(role) {
+    matches <- purrr::keep(md[["contact"]], ~ isTRUE(.x[["role"]] == role))
+    if (length(matches) == 0) return(NA_character_)
+    as.character(matches[[1]][["organisation"]] %||% NA_character_)
   }
   
-  if(is.null(metadataID)) {
-
-key_lookup <- get_metadataID(x)
-
-  } else {
-  key_lookup <- metadataID
-}
-
-key_url <- paste0("https://metashare.maps.vic.gov.au/geonetwork/srv/api/records/",key_lookup,"/formatters/sdm-html?root=html&output=html")
-
-doc <- rvest::read_html(key_url) 
-tab <- rvest::html_elements(doc, "table") %>% rvest::html_table(na.strings = "")
-
-tab_filtered <- tab[c(3,length(tab))]
-
-tab_filtered[[1]] <- tab_filtered[[1]] %>%
-  dplyr::select(.data$`Metadata Name`, .data$`Descriptions`) %>%
-  dplyr::mutate(`Metadata Name` = gsub(pattern = ":$", replacement = "", x = .data$`Metadata Name`))
-
-tab_filtered[[1]] <- dplyr::filter(tab_filtered[[1]], !is.na(.data$`Metadata Name`))
-
-suppressWarnings({
-tab_filtered[[1]] <- tab_filtered[[1]] %>% 
-  dplyr::filter(is.na(as.numeric(.data$`Metadata Name`)))
-})
-
-tab_filtered[[3]] <- key_url
-
-return(tab_filtered)
-
+  fields <- list(
+    "Resource Name" = md[["resourceTitleObject"]][["default"]],
+    "Title"         = md[["resourceTitleObject"]][["default"]],
+    "Abstract"      = md[["resourceAbstractObject"]][["default"]],
+    "Custodian"     = org_for_role("custodian"),
+    "Owner"         = org_for_role("owner"),
+    "Metadata Date" = md[["dateStamp"]],
+    "Resource Type" = md[["resourceType"]][[1]]
+  )
+  
+  meta_df <- tibble::tibble(
+    `Metadata Name` = names(fields),
+    Descriptions    = as.character(unlist(
+      lapply(fields, function(x) if (is.null(x)) NA_character_ else x)
+    ))
+  )
+  
+  # Data dictionary — scrape sdm-html formatter if still available
+  dd_df <- tryCatch({
+    doc  <- rvest::read_html(key_url)
+    tabs <- rvest::html_elements(doc, "table") %>% rvest::html_table(na.strings = "")
+    tabs[[length(tabs)]]
+  }, error = function(e) {
+    tibble::tibble(Name = character(), Type = character(), Description = character())
+  })
+  
+  list(meta_df, dd_df, key_url)
 }
 
