@@ -1,5 +1,12 @@
 # vicspatial 0.3.3
-
+* `feature_hits()`, `collect()` and `print()` now send WFS `GetFeature` requests 
+  as HTTP `POST` with a KVP form body instead of `GET` with the query in the URL. 
+  This keeps long `CQL_FILTER` statements (e.g. large `%in%` / `IN ()` lists) out 
+  of the URL, fixing `Bad Request (HTTP 400)` errors that occurred when the request 
+  URL exceeded length limits imposed by some servers and corporate proxies.
+* `feature_hits()`: dropped `outputFormat`, `count` and `maxFeatures` from the 
+  hits request, as they are invalid/contradictory for `resultType = "hits"`.
+  
 # vicspatial 0.3.2
 * `listLayers()` and `get_abstract_df()`: updated to use the GeoNetwork 4.x 
   Elasticsearch search API (`/srv/api/search/records/_search`) replacing the 
