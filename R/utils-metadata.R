@@ -38,19 +38,17 @@ feature_hits <- function(x) {
   if(!check_geoserver()) {
     return(0)
   }
-  
-  x$query$resultType   <- "hits"
-  x$query$version      <- "2.0.0"
-  x$query$outputFormat <- NULL   # not valid for resultType = hits
-  x$query$count        <- NULL   # contradicts resultType = hits
-  x$query$maxFeatures  <- NULL
+
+  x$query$resultType <- "hits"
+  x$query$outputFormat <- "text/xml"
+  x$query$version <- "2.0.0"
   
   if("CQL_FILTER" %in% names(x$query)) {
     x$query$CQL_FILTER <- finalize_cql(x$query$CQL_FILTER)
   }
   
-  # POST (KVP body) so long CQL filters don't blow the URL length limit
-  response <- wfs_post(x)
+  request <- httr::build_url(x)
+  response <- httr::GET(request)
   
   # stop if broken
   httr::stop_for_status(response)
@@ -163,25 +161,4 @@ get_col_df <- function(x) {
   return(data)
 }
 
-#' Base WFS endpoint url (no query string) from a promise
-#' @param x object of class `vicmap_promise`
-#' @noRd
-wfs_base_url <- function(x) {
-  paste0(x$scheme, "://", x$hostname, "/", x$path)
-}
 
-#' POST a WFS KVP request
-#'
-#' Sends the query as an `application/x-www-form-urlencoded` body rather than in
-#' the URL. This keeps long `CQL_FILTER` statements (e.g. large `%in%` lists) out
-#' of the URL, avoiding HTTP 400s from proxies/servers that cap URL length.
-#'
-#' @param x object of class `vicmap_promise`
-#' @return httr response object
-#' @noRd
-wfs_post <- function(x) {
-  q <- purrr::discard(x$query, is.null)
-  # CQL_FILTER may be an 'sql' object; the form body needs a plain string
-  if (!is.null(q$CQL_FILTER)) q$CQL_FILTER <- as.character(q$CQL_FILTER)
-  httr::POST(wfs_base_url(x), body = q, encode = "form")
-}

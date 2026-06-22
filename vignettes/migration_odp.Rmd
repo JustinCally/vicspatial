@@ -24,7 +24,14 @@ See the License for the specific language governing permissions and limitations 
 -->
 
 ```{r, include = FALSE}
-eval_check <- all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)
+# Connected only if the geoserver can actually serve a filtered query. The base
+# URL can be reachable while filtered WFS requests are rejected (e.g. CI /
+# datacentre IPs receive HTTP 400); in that case skip the live chunks.
+geoserver_connected <- tryCatch({
+  n <- vicspatial::feature_hits(dplyr::filter(vicspatial::vicmap_query("open-data-platform:hy_watercourse"), hierarchy == "L"))
+  is.numeric(n) && !is.na(n) && n > 0
+}, error = function(e) FALSE)
+eval_check <- all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",

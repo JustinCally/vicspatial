@@ -24,18 +24,24 @@ See the License for the specific language governing permissions and limitations 
 -->
 
 ```{r, echo = FALSE}
-geoserver_connected <- vicspatial::check_geoserver(quiet = TRUE)
+# Connected only if the geoserver can actually serve a filtered query. The base
+# URL can be reachable while filtered WFS requests are rejected (e.g. CI /
+# datacentre IPs receive HTTP 400); in that case skip the live chunks.
+geoserver_connected <- tryCatch({
+  n <- vicspatial::feature_hits(dplyr::filter(vicspatial::vicmap_query("open-data-platform:hy_watercourse"), hierarchy == "L"))
+  is.numeric(n) && !is.na(n) && n > 0
+}, error = function(e) FALSE)
 
 knitr::opts_chunk$set(
   collapse = TRUE,
   echo = TRUE,
   comment = "#>",
-  eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3),
+  eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3),
   purl = FALSE
 )
 ```
 
-```{r, include=FALSE, echo=FALSE, eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, include=FALSE, echo=FALSE, eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 # LIBRARIES -----
 library(vicspatial)
 library(dplyr)
@@ -86,7 +92,7 @@ To demonstrate vicspatial's features, we will download and explore a dataset fro
 ### Searching for data 
 First, we need to search for the dataset. We can view all layers, or do a keyword search. Use `ignore.case = TRUE` for a case-insensitive search. `listLayers()` by default now provides a column of 'Abstract' and 'metadataID'. You can remove these columns by setting the abstract argument to FALSE (e.g. `listLayers(abstract = FALSE)`)
 
-```{r,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 
 #All layers
 all_layers <- listLayers() 
@@ -98,7 +104,7 @@ search <- listLayers(pattern = "veac", ignore.case = T)
 
 Viewing our search results shows us the name of the dataset and its description.
 
-```{r echo=FALSE, warning=FALSE, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r echo=FALSE, warning=FALSE, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 library(knitr)
 library(kableExtra)
 search %>% kable() #%>% kable_styling("bordered")
@@ -108,13 +114,13 @@ Once we have the name of the dataset we would like to download, in this case *'o
 
 If we are still not sure from the name and description that this is the right dataset, we can look at the promise to get a snippet of the dataset contents. 
 
-```{r, warning=FALSE, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, warning=FALSE, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 vicmap_query(layer = "open-data-platform:veac_metro_open_space") 
 ```
 
 We can see that the dataset contains the route numbers and names. At a glance this data should be adequate. If you want more extensive information of the data you can use `get_metadata()` to download a list of (i) metadata about the data, (ii) a data dictionary (*work-in-progress*) and (iii) a link to the metadata url. 
 
-```{r, warning=FALSE, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, warning=FALSE, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 metadata <- vicmap_query(layer = "open-data-platform:veac_metro_open_space") %>%
   get_metadata() %>%
   .[[1]]
@@ -129,7 +135,7 @@ This isn't a very large dataset, but if we are using this data in an interactive
 
 Using lazy evaluation, we can use pipes to filter and subset the data, so that we only collect the desired subset. For example, let's just look at the first 10 rows.
 
-```{r, warning=FALSE, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, warning=FALSE, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 query <- vicmap_query(layer = "open-data-platform:veac_metro_open_space") %>% 
   head(10) %>% collect()
 
@@ -141,7 +147,7 @@ query
 
 Now let's only look at the open space data. Note that vicspatial datasets will retain `id` and `geometry` columns even if not selected in the vicspatial promise. As this a simple features (sf) dataset, the geometry corresponding to the features does not need to be selected as it is always attached. The geometry column can only be removed intentionally, for example, by using the `st_drop_geometry()` function in the `sf` package.
 
-```{r, warning=FALSE, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, warning=FALSE, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 veac_select <- vicmap_query(layer = "open-data-platform:veac_metro_open_space") %>% 
   filter(dominant_lga_name == "DAREBIN") %>% 
   filter(ha > 0.1) %>% 
@@ -161,7 +167,7 @@ veac_select <- vicmap_query(layer = "open-data-platform:veac_metro_open_space") 
 
 Often the first thing we want to do is see the data on a map. The simplest and quickest way to visualise spatial data is to use the `mapview` package:
 
-```{r, warning=FALSE, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, warning=FALSE, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 library(mapview)
 mapviewOptions(fgb = FALSE)
 
@@ -182,7 +188,7 @@ For more customization, you might want to consider plotting your map in `leaflet
 
 We will start by plotting the most basic map in leaflet. Instead of using a single function like `mapview()`, in leaflet we need to add each component to the map. At a minimum we specify the leaflet object, add a basemap and add the markers. Note: differing to mapview, leaflet does not include marker labels by default, these must be added with the `popup` parameter.
 
-```{r, warning=FALSE, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, warning=FALSE, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 library(leaflet)
 
 # Create a palette
@@ -214,7 +220,7 @@ These geometric filters allow us to perform basic spatial manipulation while ret
 
 To get the areas only in Darebin we can filter with `INTERSECTS()`.
 
-```{r, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 # areas in Darebin
 darebin <- vicmap_query(layer = "open-data-platform:lga_polygon") %>%
   select(lga_name) %>% 
@@ -231,7 +237,7 @@ mapview::mapview(darebin) + mapview::mapview(darebin_veac, alpha.regions = 0.3, 
 ```
 And finally, the veac open spaces on our cycling route. To find spaces within 30m we use the `INTERSECTS()` function and the cycling route with an added 30m buffer. Note: vicspatial geometric filters will be simplified, thus if precise intersections are desired, it is advised to do a cleanup of the filtered data once collected.
 
-```{r, warning=FALSE, message=FALSE,eval = all(vicspatial::check_geoserver(quiet = TRUE), !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
+```{r, warning=FALSE, message=FALSE,eval = all(geoserver_connected, !testthat:::on_cran(), sf::sf_extSoftVersion()[["GDAL"]] > 3)}
 
 route_line <- sf::st_read(system.file("shapes/cycle_route.geojson", package="vicspatial"), quiet = F) %>% 
   sf::st_transform(4283)

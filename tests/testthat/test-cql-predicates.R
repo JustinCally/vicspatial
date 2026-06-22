@@ -18,7 +18,17 @@ suppressPackageStartupMessages(library(sf, quietly = TRUE))
 
 the_geom <- st_sf(st_sfc(st_point(c(1,1)))) %>% `st_crs<-`(4283)
 
-geoserver_down <- !(check_geoserver(timeout = 5, quiet = TRUE))
+# Treat the geoserver as "down" if it can't actually serve a filtered query.
+# The base URL can be reachable while filtered WFS requests are rejected (e.g.
+# CI / datacentre IPs receive HTTP 400), which would otherwise fail these tests
+# instead of skipping them.
+geoserver_down <- tryCatch(
+  {
+    feature_hits(filter(vicmap_query("open-data-platform:hy_watercourse"), hierarchy == "L"))
+    FALSE
+  },
+  error = function(e) TRUE
+)
 
 test_that("vicmap_cql_string fails when an invalid arguments are given",{
   expect_error(vicspatial:::vicmap_cql_string(the_geom, "FOO"))
