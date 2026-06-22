@@ -1,3 +1,5 @@
+# vicspatial 0.3.3
+
 # vicspatial 0.3.2
 * `listLayers()` and `get_abstract_df()`: updated to use the GeoNetwork 4.x 
   Elasticsearch search API (`/srv/api/search/records/_search`) replacing the 

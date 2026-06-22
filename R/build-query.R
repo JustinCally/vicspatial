@@ -192,7 +192,7 @@ collect.vicmap_promise <- function(x, quiet = FALSE, paginate = TRUE, ...) {
     loop_times <- ceiling(number_of_records/getOption("vicmap.chunk_limit", default = 5000L))
     # inform user of delay
     if(!quiet) {
-    message(paste0("There are ", number_of_records, " rows to be retrieved. This is more than the Vicmap chunk limit (", getOption("vicmap.chunk_limit", default = 5000L),"). The collection of data will be paginated and might take some time."))
+      message(paste0("There are ", number_of_records, " rows to be retrieved. This is more than the Vicmap chunk limit (", getOption("vicmap.chunk_limit", default = 5000L),"). The collection of data will be paginated and might take some time."))
     }
     # pick something to sort by
     cols <- feature_cols(x)
@@ -203,22 +203,24 @@ collect.vicmap_promise <- function(x, quiet = FALSE, paginate = TRUE, ...) {
     
     #progress bar
     if(!quiet) {
-    pb <- utils::txtProgressBar(min = 0, max = loop_times, initial = 0, width = 50, style = 3) 
+      pb <- utils::txtProgressBar(min = 0, max = loop_times, initial = 0, width = 50, style = 3) 
     }
     
     for(i in 1:loop_times) {
       cl <- getOption("vicmap.chunk_limit", default = 5000L)
       x$query$startIndex <- (i-1)*cl
       if(getOption("vicmap.backend", default = "AWS") != "AWS") {
-      x$query$sortBy <- sort_col 
+        x$query$sortBy <- sort_col 
       }
       if(x$query$version == "2.0.0") {
         x$query$count <- min(c(number_of_records-((i-1)*cl), cl))
       } else {
         x$query$maxFeatures <- min(c(number_of_records-((i-1)*cl)))
       }
-      request <- httr::build_url(x)
-      returned_sf[[i]] <- sf::read_sf(request, ...)
+      # POST (KVP body) so long CQL filters don't blow the URL length limit
+      resp <- wfs_post(x)
+      httr::stop_for_status(resp)
+      returned_sf[[i]] <- sf::read_sf(httr::content(resp, as = "text", encoding = "UTF-8"), ...)
       
       # Update progress bar
       if(!quiet) {
@@ -227,14 +229,13 @@ collect.vicmap_promise <- function(x, quiet = FALSE, paginate = TRUE, ...) {
       
     }
     return(do.call("rbind", returned_sf))
-     
+    
   } else {
     # if less than only loop once
-    request <- httr::build_url(x)
-    return(sf::read_sf(request, ...))
+    resp <- wfs_post(x)
+    httr::stop_for_status(resp)
+    return(sf::read_sf(httr::content(resp, as = "text", encoding = "UTF-8"), ...))
   }
-  
-  
   
 }
 
@@ -319,14 +320,15 @@ print.vicmap_promise <- function(x, ...) {
     }
   }
   
-  request <- httr::build_url(x)  
-  
-  sample_data <- sf::read_sf(request)
+  # POST (KVP body) so long CQL filters don't blow the URL length limit
+  resp <- wfs_post(x)
+  httr::stop_for_status(resp)
+  sample_data <- sf::read_sf(httr::content(resp, as = "text", encoding = "UTF-8"))
   
   fields <- length(sample_data)
   
   cli::cat_bullet(strwrap(glue::glue("Using {cli::col_blue('collect()')} on this object will return {cli::col_green(number_of_records)} features ",
-                                "and {cli::col_green(fields)} fields")))
+                                     "and {cli::col_green(fields)} fields")))
   cli::cat_bullet(strwrap("At most six rows of the record are printed here"))
   cli::cat_rule()
   print(sample_data, ...)
