@@ -95,7 +95,7 @@ test_that("CQL translate works", {
   expect_is(vicspatial:::cql_translate(CQL(BBOX(!!st_bbox(the_geom)))), c("sql", "character"))
   
   # Test not equal predicate
-  vmne <- vicmap_query("open-data-platform:vmlite_victoria_polygon_su5") %>%
+  vmne <- vicmap_query("open-data-platform:vmlite_victoria_polygon") %>%
     filter(state != "VIC")
   
   expect_equal(as.character(vmne$query$CQL_FILTER), "(NOT \"state\" = 'VIC')")
