@@ -160,12 +160,12 @@ show_query.vicmap_promise <- function(x, ...) {
 collect.vicmap_promise <- function(x, quiet = FALSE, paginate = TRUE, ...) {
   
   # Exit out if null
-  if(is.null(x)){
+  if (is.null(x)) {
     return(NULL)
   }
   
   # Exit out if problem with connection
-  if(!check_geoserver(timeout = 10, quiet = TRUE)) {
+  if (!check_geoserver(timeout = 10, quiet = TRUE)) {
     return(NULL)
   }
   
@@ -174,57 +174,55 @@ collect.vicmap_promise <- function(x, quiet = FALSE, paginate = TRUE, ...) {
   # check number of records
   number_of_records <- feature_hits(x)
   
-  #get queried count
-  if(x$query$version == "2.0.0") {
+  # get queried count
+  if (x$query$version == "2.0.0") {
     the_count <- x$query$count
   } else {
-    the_count <- x$query$maxFeatures 
+    the_count <- x$query$maxFeatures
   }
   
   # For when head is used
-  if(the_count > getOption("vicmap.chunk_limit", default = 5000L)) {
+  if (the_count > getOption("vicmap.chunk_limit", default = 5000L)) {
     number_of_records <- the_count
   }
   
-  #paginate?
-  if(number_of_records > getOption("vicmap.chunk_limit", default = 5000L) & paginate == TRUE & the_count >= getOption("vicmap.chunk_limit", default = 5000L)) {
+  # paginate?
+  if (number_of_records > getOption("vicmap.chunk_limit", default = 5000L) & paginate == TRUE & the_count >= getOption("vicmap.chunk_limit", default = 5000L)) {
     # number of times to loop
-    loop_times <- ceiling(number_of_records/getOption("vicmap.chunk_limit", default = 5000L))
+    loop_times <- ceiling(number_of_records / getOption("vicmap.chunk_limit", default = 5000L))
     # inform user of delay
-    if(!quiet) {
-      message(paste0("There are ", number_of_records, " rows to be retrieved. This is more than the Vicmap chunk limit (", getOption("vicmap.chunk_limit", default = 5000L),"). The collection of data will be paginated and might take some time."))
+    if (!quiet) {
+      message(paste0("There are ", number_of_records, " rows to be retrieved. This is more than the Vicmap chunk limit (", getOption("vicmap.chunk_limit", default = 5000L), "). The collection of data will be paginated and might take some time."))
     }
     # pick something to sort by
     cols <- feature_cols(x)
     sort_col <- ifelse("OBJECTID" %in% cols, "OBJECTID", cols[1])
     
-    #set up list
+    # set up list
     returned_sf <- list()
     
-    #progress bar
-    if(!quiet) {
-      pb <- utils::txtProgressBar(min = 0, max = loop_times, initial = 0, width = 50, style = 3) 
+    # progress bar
+    if (!quiet) {
+      pb <- utils::txtProgressBar(min = 0, max = loop_times, initial = 0, width = 50, style = 3)
     }
     
-    for(i in 1:loop_times) {
+    for (i in 1:loop_times) {
       cl <- getOption("vicmap.chunk_limit", default = 5000L)
-      x$query$startIndex <- (i-1)*cl
-      if(getOption("vicmap.backend", default = "AWS") != "AWS") {
-        x$query$sortBy <- sort_col 
+      x$query$startIndex <- (i - 1) * cl
+      if (getOption("vicmap.backend", default = "AWS") != "AWS") {
+        x$query$sortBy <- sort_col
       }
-      if(x$query$version == "2.0.0") {
-        x$query$count <- min(c(number_of_records-((i-1)*cl), cl))
+      if (x$query$version == "2.0.0") {
+        x$query$count <- min(c(number_of_records - ((i - 1) * cl), cl))
       } else {
-        x$query$maxFeatures <- min(c(number_of_records-((i-1)*cl)))
+        x$query$maxFeatures <- min(c(number_of_records - ((i - 1) * cl)))
       }
-      # POST (KVP body) so long CQL filters don't blow the URL length limit
-      resp <- wfs_post(x)
-      httr::stop_for_status(resp)
-      returned_sf[[i]] <- sf::read_sf(httr::content(resp, as = "text", encoding = "UTF-8"), ...)
+      # GET for short URLs, POST when the CQL filter makes the URL too long
+      returned_sf[[i]] <- wfs_read_sf(x, ...)
       
       # Update progress bar
-      if(!quiet) {
-        utils::setTxtProgressBar(pb,i)
+      if (!quiet) {
+        utils::setTxtProgressBar(pb, i)
       }
       
     }
@@ -232,9 +230,7 @@ collect.vicmap_promise <- function(x, quiet = FALSE, paginate = TRUE, ...) {
     
   } else {
     # if less than only loop once
-    resp <- wfs_post(x)
-    httr::stop_for_status(resp)
-    return(sf::read_sf(httr::content(resp, as = "text", encoding = "UTF-8"), ...))
+    return(wfs_read_sf(x, ...))
   }
   
 }
@@ -295,12 +291,12 @@ head.vicmap_promise <- function(x, n = 5, ...) {
 print.vicmap_promise <- function(x, ...) {
   
   # Exit out if null
-  if(is.null(x)){
+  if (is.null(x)) {
     return(NULL)
   }
   
   # Exit out if problem with connection
-  if(!check_geoserver(timeout = 10, quiet = TRUE)) {
+  if (!check_geoserver(timeout = 10, quiet = TRUE)) {
     return(NULL)
   }
   
@@ -308,22 +304,16 @@ print.vicmap_promise <- function(x, ...) {
   
   number_of_records <- feature_hits(x)
   
-  if(is.null(number_of_records) || is.na(number_of_records) || number_of_records == 0) {
-    stop("No data available to query. Check your layer and query parameters")
-  }
-  
-  if(number_of_records > 6) {
-    if(x$query$version == "2.0.0") {
-      x$query$count <- 6 
+  if (number_of_records > 6) {
+    if (x$query$version == "2.0.0") {
+      x$query$count <- 6
     } else {
-      x$query$maxFeatures <- 6 
+      x$query$maxFeatures <- 6
     }
   }
   
-  # POST (KVP body) so long CQL filters don't blow the URL length limit
-  resp <- wfs_post(x)
-  httr::stop_for_status(resp)
-  sample_data <- sf::read_sf(httr::content(resp, as = "text", encoding = "UTF-8"))
+  # GET for short URLs, POST when the CQL filter makes the URL too long
+  sample_data <- wfs_read_sf(x)
   
   fields <- length(sample_data)
   

@@ -35,7 +35,7 @@
 #'  }
 feature_hits <- function(x) {
   
-  if(!check_geoserver()) {
+  if (!check_geoserver()) {
     return(0)
   }
   
@@ -45,12 +45,11 @@ feature_hits <- function(x) {
   x$query$count        <- NULL   # contradicts resultType = hits
   x$query$maxFeatures  <- NULL
   
-  if("CQL_FILTER" %in% names(x$query)) {
+  if ("CQL_FILTER" %in% names(x$query)) {
     x$query$CQL_FILTER <- finalize_cql(x$query$CQL_FILTER)
   }
   
-  # POST (KVP body) so long CQL filters don't blow the URL length limit
-  response <- wfs_post(x)
+  response <- wfs_fetch(x)
   
   # stop if broken
   httr::stop_for_status(response)
@@ -173,9 +172,7 @@ wfs_base_url <- function(x) {
 #' POST a WFS KVP request
 #'
 #' Sends the query as an `application/x-www-form-urlencoded` body rather than in
-#' the URL. This keeps long `CQL_FILTER` statements (e.g. large `%in%` lists) out
-#' of the URL, avoiding HTTP 400s from proxies/servers that cap URL length.
-#'
+#' the URL, keeping long `CQL_FILTER` statements out of the URL.
 #' @param x object of class `vicmap_promise`
 #' @return httr response object
 #' @noRd
@@ -184,4 +181,37 @@ wfs_post <- function(x) {
   # CQL_FILTER may be an 'sql' object; the form body needs a plain string
   if (!is.null(q$CQL_FILTER)) q$CQL_FILTER <- as.character(q$CQL_FILTER)
   httr::POST(wfs_base_url(x), body = q, encode = "form")
+}
+
+#' Fetch a WFS request as an httr response
+#'
+#' Uses GET for normal requests, switching to POST only when the built URL would
+#' exceed `url_limit`. Long `CQL_FILTER`s (e.g. large `%in%` lists) can exceed
+#' server/proxy URL-length limits (HTTP 400); POST keeps them out of the URL. GET
+#' is the default so requests behave exactly as before for environments that
+#' reject POST (e.g. some CI/datacentre networks).
+#' @param x object of class `vicmap_promise`
+#' @param url_limit integer; URL length (chars) above which POST is used
+#' @return httr response object
+#' @noRd
+wfs_fetch <- function(x, url_limit = 2000) {
+  url <- httr::build_url(x)
+  if (nchar(url) <= url_limit) httr::GET(url) else wfs_post(x)
+}
+
+#' Read WFS features into sf, via GET (short URL) or POST (long URL)
+#' @param x object of class `vicmap_promise`
+#' @param url_limit integer; URL length (chars) above which POST is used
+#' @param ... passed to \link[sf]{read_sf}
+#' @return sf object
+#' @noRd
+wfs_read_sf <- function(x, url_limit = 2000, ...) {
+  url <- httr::build_url(x)
+  if (nchar(url) <= url_limit) {
+    sf::read_sf(url, ...)
+  } else {
+    resp <- wfs_post(x)
+    httr::stop_for_status(resp)
+    sf::read_sf(httr::content(resp, as = "text", encoding = "UTF-8"), ...)
+  }
 }

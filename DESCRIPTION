@@ -1,6 +1,6 @@
 Package: vicspatial
 Title: Access Victorian Spatial Data Through Web File Services (WFS) 
-Version: 0.3.3
+Version: 0.3.4
 Authors@R: 
     c(person(given = "Justin",
            family = "Cally",

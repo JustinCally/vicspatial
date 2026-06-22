@@ -1,3 +1,6 @@
+# vicspatial 0.3.4
+* Fix Get/Post conflict in github actions.  
+
 # vicspatial 0.3.3
 * `feature_hits()`, `collect()` and `print()` now send WFS `GetFeature` requests 
   as HTTP `POST` with a KVP form body instead of `GET` with the query in the URL. 
