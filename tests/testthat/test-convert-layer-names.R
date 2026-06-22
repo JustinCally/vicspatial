@@ -10,7 +10,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and limitations under the License.
 
-geoserver_down <- !(check_geoserver(timeout = 5, quiet = TRUE))
+# Treat the geoserver as "down" if it can't actually serve a filtered query.
+# The base URL can be reachable while filtered WFS requests are rejected (e.g.
+# CI / datacentre IPs receive HTTP 400), which would otherwise fail these tests
+# instead of skipping them.
+geoserver_down <- tryCatch(
+  {
+    feature_hits(filter(vicmap_query("open-data-platform:hy_watercourse"), hierarchy == "L"))
+    FALSE
+  },
+  error = function(e) TRUE
+)
 
 test_that("convert layer name works", {
   
